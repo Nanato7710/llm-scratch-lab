@@ -4,11 +4,12 @@
 
 GitHub Flowを採用する．
 ブランチの命名規則は`type/short-description`とする．例：`feature/add-model`，`fix/null-pointer-on-startup`，`docs/update-readme`など．
+
 |type|説明|
 |----|----|
 |feature|新機能|
 |fix|バグ修正|
-|repactor|挙動を変えない整理|
+|refactor|挙動を変えない整理|
 |docs|ドキュメント|
 |test|テストの追加/修正|
 |perf|性能改善|
