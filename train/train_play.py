@@ -48,7 +48,7 @@ cfg = Config(
     context_length=SEQ_LENGTH,
     emb_dim=512,
     n_heads=16,
-    n_layers=8,
+    n_layers=16,
     hidden_dim=2_048,
     head_dim=128,
     qk_norm=True,
@@ -66,7 +66,15 @@ cfg = Config(
         "sliding_attention",
         "sliding_attention",
         "sliding_attention",
-        "full_attention"
+        "full_attention",
+        "sliding_attention",
+        "sliding_attention",
+        "sliding_attention",
+        "full_attention",
+        "sliding_attention",
+        "sliding_attention",
+        "sliding_attention",
+        "full_attention",
     ]
 )
 
@@ -157,16 +165,19 @@ def generate_sample(model: Gemma3, optimizer: RAdamScheduleFree, tokenizer, prom
     return generated_text
 # %%
 step = 1
+best_val_ppl = float('inf')
 for batch in train_loader:
     train_loss, lr = train_one_step(model, batch, optimizer)
-    print(f"Step {step}/{TOTAL_STEPS} - Loss: {train_loss} - LR: {lr}")
     writer.add_scalar("Loss/Train", train_loss, step)
     writer.add_scalar("Learning Rate", lr, step)
 
     if step % CHECKPOINT_INTERVAL == 0:
         save_checkpoint(model, cfg, optimizer, step, checkpoint_dir=CHECKPOINT_PATH)
-        val_loss = test(model, test_loader, optimizer)
-        writer.add_scalar("Loss/Validation", val_loss, step)
+        val_ppl = test(model, test_loader, optimizer)
+        if val_ppl < best_val_ppl:
+            best_val_ppl = val_ppl
+            save_checkpoint(model, cfg, optimizer, -1, checkpoint_dir=CHECKPOINT_PATH)
+        writer.add_scalar("Loss/Validation", val_ppl, step)
         menhera_sample = generate_sample(model, optimizer, tokenizer, prompt=menhera_text)
         oji_sample = generate_sample(model, optimizer, tokenizer, prompt=oji_text)
         writer.add_text("Sample/Menhera", menhera_sample, step)
