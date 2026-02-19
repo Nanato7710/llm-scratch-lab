@@ -2,6 +2,8 @@
 import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
+from dotenv import load_dotenv
+load_dotenv()
 #%%
 import time
 from models.Gemma3.Base import Gemma3, Config
@@ -13,7 +15,7 @@ from datasets import load_dataset
 from schedulefree import RAdamScheduleFree
 from torch.nn.functional import cross_entropy
 from torch.utils.tensorboard import SummaryWriter
-from tqdm.auto import tqdm
+import wandb
 # %%
 SUM_SAMPLES = 1_048_576 # 1BTに近い2の冪数．fineweb2の1sampleが平均540tokensだったから．
 BATCH_SIZE = 16
@@ -21,7 +23,10 @@ TOTAL_STEPS = SUM_SAMPLES // BATCH_SIZE
 CHECKPOINT_INTERVAL = 128
 SEQ_LENGTH = 1_024
 RANDOM_SEED = 42
-CHECKPOINT_PATH = f"checkpoints/gemma3_play/{time.strftime('%Y%m%d-%H%M%S')}"
+TIME_STR = time.strftime("%Y%m%d-%H%M%S")
+CHECKPOINT_PATH = f"checkpoints/gemma3_play/{TIME_STR}"
+TENSORBOARD_ROOT = "logs/gemma3_play"
+TENSORBOARD_LOG_DIR = f"{TENSORBOARD_ROOT}/{TIME_STR}"
 #%%
 
 torch.manual_seed(RANDOM_SEED)
@@ -48,7 +53,7 @@ cfg = Config(
     context_length=SEQ_LENGTH,
     emb_dim=512,
     n_heads=16,
-    n_layers=16,
+    n_layers=12,
     hidden_dim=2_048,
     head_dim=128,
     qk_norm=True,
@@ -59,10 +64,6 @@ cfg = Config(
     dtype=torch.bfloat16,
     query_pre_attn_scalar=128,
     layer_types=[
-        "sliding_attention",
-        "sliding_attention",
-        "sliding_attention",
-        "full_attention",
         "sliding_attention",
         "sliding_attention",
         "sliding_attention",
@@ -96,9 +97,9 @@ collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, collate_fn=collator)
 test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, collate_fn=collator)
 # %%
-def save_checkpoint(model: Gemma3, cfg: Config, optimizer: RAdamScheduleFree, step: int, checkpoint_dir: str = "checkpoints"):
-    checkpoint_path = Path(checkpoint_dir) / f"step_{step}"
-    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+def save_checkpoint(model: Gemma3, cfg: Config, optimizer: RAdamScheduleFree, step: int, checkpoint_dir: str = "checkpoints", is_best: bool = False):
+    checkpoint_path = Path(checkpoint_dir) / "best" if is_best else Path(checkpoint_dir) / "normal"
+    checkpoint_path.mkdir(parents=True, exist_ok=True)
 
     raw_model: Gemma3 = model._orig_mod if hasattr(model, "_orig_mod") else model
     state: dict = {k: v.cpu() for k, v in raw_model.state_dict().items()}
@@ -114,7 +115,8 @@ def save_checkpoint(model: Gemma3, cfg: Config, optimizer: RAdamScheduleFree, st
 model = torch.compile(model)
 optimizer = RAdamScheduleFree(model.parameters())
 # %%
-writer = SummaryWriter(log_dir="logs/gemma3_play/"+time.strftime("%Y%m%d-%H%M%S"))
+run = wandb.init(project="gemma3_play", config=dict(cfg), name=TIME_STR, sync_tensorboard=True)
+writer = SummaryWriter(log_dir=TENSORBOARD_LOG_DIR)
 # %%
 def train_one_step(model: Gemma3, batch: dict[str, torch.Tensor], optimizer: RAdamScheduleFree)-> tuple[float, float]:
     model.train()
@@ -152,8 +154,11 @@ def test(model: Gemma3, dataloader: DataLoader, optimizer: RAdamScheduleFree) ->
             if count >= 30:
                 break
 
-    ppl = torch.exp(torch.tensor(total_nll / total_tokens)) if total_tokens > 0 else torch.tensor(float('inf'))
-    return ppl.item()
+    if total_tokens > 0:
+        ppl = torch.exp(torch.tensor(total_nll / total_tokens)).item()
+    else:
+        ppl = -100
+    return ppl
 
 def generate_sample(model: Gemma3, optimizer: RAdamScheduleFree, tokenizer, prompt: str, max_new_tokens: int = 100):
     model.eval()
@@ -170,18 +175,20 @@ for batch in train_loader:
     train_loss, lr = train_one_step(model, batch, optimizer)
     writer.add_scalar("Loss/Train", train_loss, step)
     writer.add_scalar("Learning Rate", lr, step)
+    run.log({"Loss/Train": train_loss, "Learning Rate": lr}, step=step)
 
     if step % CHECKPOINT_INTERVAL == 0:
-        save_checkpoint(model, cfg, optimizer, step, checkpoint_dir=CHECKPOINT_PATH)
+        save_checkpoint(model, cfg, optimizer, step, checkpoint_dir=CHECKPOINT_PATH, is_best=False)
         val_ppl = test(model, test_loader, optimizer)
         if val_ppl < best_val_ppl:
             best_val_ppl = val_ppl
-            save_checkpoint(model, cfg, optimizer, -1, checkpoint_dir=CHECKPOINT_PATH)
+            save_checkpoint(model, cfg, optimizer, step, checkpoint_dir=CHECKPOINT_PATH, is_best=True)
         writer.add_scalar("Loss/Validation", val_ppl, step)
+        run.log({"Loss/Validation": val_ppl}, step=step)
         menhera_sample = generate_sample(model, optimizer, tokenizer, prompt=menhera_text)
         oji_sample = generate_sample(model, optimizer, tokenizer, prompt=oji_text)
         writer.add_text("Sample/Menhera", menhera_sample, step)
         writer.add_text("Sample/Oji", oji_sample, step)
+        run.log({"Sample/Menhera": wandb.Html(menhera_sample), "Sample/Oji": wandb.Html(oji_sample)}, step=step)
     step += 1
-
-
+run.finish()
