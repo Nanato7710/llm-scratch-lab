@@ -1,8 +1,8 @@
 # 下記のリンク先のコードを元に，Gemma3のベースとなるクラスを実装する．
 # https://github.com/rasbt/LLMs-from-scratch/blob/7b1f740f74cbeb9e1c1c24ee19ab6e1729209240/ch05/12_gemma3/standalone-gemma3.ipynb
 
-from dataclasses import dataclass
 from typing import Literal
+from pydantic import BaseModel, ConfigDict, field_validator, field_serializer
 
 import torch
 import torch.nn as nn
@@ -11,8 +11,18 @@ import torch.nn as nn
 
 attention_types = Literal["sliding_attention", "full_attention"]
 
-@dataclass
-class Config:
+def _dtype_to_str(dt: torch.dtype) -> str:
+    return str(dt).replace("torch.", "")
+
+def _str_to_dtype(s: str) -> torch.dtype:
+    s = s.replace("torch.", "")
+    if not hasattr(torch, s):
+        raise ValueError(f"Unknown torch dtype: {s}")
+    return getattr(torch, s)
+
+class Config(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     vocab_size: int
     context_length: int
     emb_dim: int
@@ -20,14 +30,27 @@ class Config:
     n_layers: int
     hidden_dim: int
     head_dim: int
-    qk_norm: bool
-    n_kv_groups: int
-    rope_local_base: float
-    rope_base: float
-    sliding_window: int
+    qk_norm: bool = True
+    n_kv_groups: int = 1
+    rope_local_base: float = 10_000.0
+    rope_base: float = 1_000_000.0
+    sliding_window: int = 512
+    dtype: torch.dtype = torch.bfloat16
+    query_pre_attn_scalar: int = 128
     layer_types: list[attention_types]
-    dtype: torch.dtype
-    query_pre_attn_scalar: int
+
+    @field_validator("dtype", mode="before")
+    @classmethod
+    def _parse_dtype(cls, v):
+        if isinstance(v, torch.dtype):
+            return v
+        if isinstance(v, str):
+            return _str_to_dtype(v)
+        raise TypeError(f"dtype must be torch.dtype or str, got {type(v)}")
+
+    @field_serializer("dtype", when_used="json")
+    def _serialize_dtype(self, v: torch.dtype):
+        return _dtype_to_str(v)
 
 
 class FeedForward(nn.Module):
@@ -264,7 +287,7 @@ class Gemma3(nn.Module):
         #     7:  0 0 0 0 0 0 0 0
         #
         # torch.triuは上三角行列を返す関数．diagonal=1とすることで，対角線の1つ上から上三角行列を作成する．
-        mask_global = torch.BoolTensor(torch.triu(ones, diagonal=1)) # (seq_len, seq_len)
+        mask_global = torch.triu(ones, diagonal=1) # (seq_len, seq_len)
 
         # far_past (too far back is masked: i - j >= sliding_window)
         # where sliding_window = 4
@@ -293,7 +316,7 @@ class Gemma3(nn.Module):
         # 5:      1 1 0 0 0 0 1 1
         # 6:      1 1 1 0 0 0 0 1
         # 7:      1 1 1 1 0 0 0 0
-        mask_local = torch.BoolTensor(mask_global | far_past)
+        mask_local = mask_global | far_past
 
         return mask_global, mask_local
 
