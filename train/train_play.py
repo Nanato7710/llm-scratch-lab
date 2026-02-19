@@ -128,7 +128,8 @@ def train_one_step(model: Gemma3, batch: dict[str, torch.Tensor], optimizer: RAd
 def test(model: Gemma3, dataloader: DataLoader, optimizer: RAdamScheduleFree) -> float:
     model.eval()
     optimizer.eval()
-    total_loss = 0.0
+    total_nll = 0.0
+    total_tokens = 0
     count = 0
     with torch.no_grad():
         for batch in dataloader:
@@ -136,14 +137,15 @@ def test(model: Gemma3, dataloader: DataLoader, optimizer: RAdamScheduleFree) ->
             labels = batch["labels"][:,1:].to(device)
 
             outputs = model(input_ids=input_ids)[:,:-1]
-            loss = cross_entropy(outputs.reshape(-1, outputs.size(-1)), labels.reshape(-1))
-            total_loss += loss.item()
+            nll = cross_entropy(outputs.reshape(-1, outputs.size(-1)), labels.reshape(-1), reduction="sum")
+            total_nll += nll.item()
+            total_tokens += (labels != -100).sum().item()  # -100はignore_index
             count += 1
             if count >= 30:
                 break
 
-    avg_loss = total_loss / count
-    return avg_loss
+    ppl = torch.exp(torch.tensor(total_nll / total_tokens)) if total_tokens > 0 else torch.tensor(float('inf'))
+    return ppl.item()
 
 def generate_sample(model: Gemma3, optimizer: RAdamScheduleFree, tokenizer, prompt: str, max_new_tokens: int = 100):
     model.eval()
