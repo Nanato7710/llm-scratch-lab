@@ -115,7 +115,7 @@ def save_checkpoint(model: Gemma3, cfg: Config, optimizer: RAdamScheduleFree, st
 model = torch.compile(model)
 optimizer = RAdamScheduleFree(model.parameters(), lr=3e-3, betas=(0.98, 0.999))
 # %%
-run = wandb.init(project="gemma3_play", config=dict(cfg), name=TIME_STR, sync_tensorboard=True)
+run = wandb.init(project="gemma3_play", config=dict(cfg), name=TIME_STR+"ga", sync_tensorboard=True)
 writer = SummaryWriter(log_dir=TENSORBOARD_LOG_DIR)
 # %%
 def train_one_step(model: Gemma3, batch: dict[str, torch.Tensor], optimizer: RAdamScheduleFree)-> tuple[float, float]:
