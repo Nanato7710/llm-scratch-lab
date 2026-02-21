@@ -113,7 +113,7 @@ def save_checkpoint(model: Gemma3, cfg: Config, optimizer: RAdamScheduleFree, st
         f.write(cfg.model_dump_json(indent=4))
 # %%
 model = torch.compile(model)
-optimizer = RAdamScheduleFree(model.parameters(), lr=3e-3, betas=(0.98, 0.999))
+optimizer = RAdamScheduleFree(model.parameters(), lr=0.003, betas=(0.98, 0.999))
 # %%
 run = wandb.init(project="gemma3_play", config=dict(cfg), name=TIME_STR+"_lr3e-3_beta1_0.98", sync_tensorboard=True)
 writer = SummaryWriter(log_dir=TENSORBOARD_LOG_DIR)
@@ -129,6 +129,7 @@ def train_one_step(model: Gemma3, batch: dict[str, torch.Tensor], optimizer: RAd
     outputs = model(input_ids=input_ids)[:,:-1]
     loss = cross_entropy(outputs.reshape(-1, outputs.size(-1)), labels.reshape(-1))
     loss.backward()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
     scheduled_lr = optimizer.param_groups[0]["scheduled_lr"]
     optimizer.step()
 
