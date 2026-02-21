@@ -16,6 +16,7 @@ from schedulefree import RAdamScheduleFree
 from torch.nn.functional import cross_entropy
 from torch.utils.tensorboard import SummaryWriter
 import wandb
+from my_utils import count_parameters
 # %%
 SUM_SAMPLES = 1_048_576 # 1BTに近い2の冪数．fineweb2の1sampleが平均540tokensだったから．
 BATCH_SIZE = 16
@@ -72,6 +73,7 @@ cfg = Config(
 )
 
 model = Gemma3(cfg).to(device)
+count_parameters(model, is_print=True)
 # %%
 from datasets import load_dataset
 # %%
