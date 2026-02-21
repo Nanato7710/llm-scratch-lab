@@ -344,7 +344,7 @@ class Gemma3(nn.Module):
         logits = self.out_head(x.to(self.cfg.dtype)) # (batch_size, seq_len, vocab_size)
         return logits
 
-    def generate(self, input_ids: torch.Tensor, max_new_tokens: int, eos_id: int, temperature: float = 1.0, top_k: int = 40, top_p: float = 0.9, repetition_penalty: float = 1.2) -> torch.Tensor:
+    def generate(self, input_ids: torch.Tensor, max_new_tokens: int, eos_id: int, temperature: float = 0.6, top_k: int = 50, top_p: float = 0.95, repetition_penalty: float = 1.0) -> torch.Tensor:
         # max_new_tokensが0以下なら何も生成せずそのまま返す．
         if max_new_tokens <= 0:
             return input_ids
