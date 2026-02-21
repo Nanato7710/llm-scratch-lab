@@ -52,12 +52,12 @@ cfg = Config(
     vocab_size=vocab_size,
     context_length=SEQ_LENGTH,
     emb_dim=512,
-    n_heads=16,
-    n_layers=12,
-    hidden_dim=2_048,
-    head_dim=128,
+    n_heads=8,
+    n_layers=24,
+    hidden_dim=1_012,
+    head_dim=64,
     qk_norm=True,
-    n_kv_groups=4,
+    n_kv_groups=2,
     rope_local_base=10_000.0,
     rope_base=1_000_000.0,
     sliding_window=512,
@@ -68,15 +68,7 @@ cfg = Config(
         "sliding_attention",
         "sliding_attention",
         "full_attention",
-        "sliding_attention",
-        "sliding_attention",
-        "sliding_attention",
-        "full_attention",
-        "sliding_attention",
-        "sliding_attention",
-        "sliding_attention",
-        "full_attention",
-    ]
+    ]*6
 )
 
 model = Gemma3(cfg).to(device)
