@@ -11,3 +11,5 @@ wheels/
 .venv
 .env
 .DS_Store
+wandb/
+logs/
