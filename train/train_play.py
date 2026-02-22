@@ -20,8 +20,9 @@ from my_utils import count_parameters
 # %%
 SUM_SAMPLES = 1_048_576 # 1BTに近い2の冪数．fineweb2の1sampleが平均540tokensだったから．
 BATCH_SIZE = 16
+ACCUMULATE_STEPS = 16
 TOTAL_STEPS = SUM_SAMPLES // BATCH_SIZE
-CHECKPOINT_INTERVAL = 128
+CHECKPOINT_INTERVAL = 16 * ACCUMULATE_STEPS
 SEQ_LENGTH = 1_024
 RANDOM_SEED = 42
 TIME_STR = time.strftime("%Y%m%d-%H%M%S")
@@ -55,7 +56,7 @@ cfg = Config(
     emb_dim=512,
     n_heads=8,
     n_layers=24,
-    hidden_dim=1_012,
+    hidden_dim=1_024,
     head_dim=64,
     qk_norm=True,
     n_kv_groups=2,
@@ -112,21 +113,22 @@ optimizer = RAdamScheduleFree(model.parameters(), lr=0.003, betas=(0.98, 0.999))
 run = wandb.init(project="gemma3_play", config=dict(cfg), name=TIME_STR+"_lr3e-3_beta1_0.98", sync_tensorboard=True)
 writer = SummaryWriter(log_dir=TENSORBOARD_LOG_DIR)
 # %%
-def train_one_step(model: Gemma3, batch: dict[str, torch.Tensor], optimizer: RAdamScheduleFree)-> tuple[float, float]:
+def train_one_step(model: Gemma3, batch: dict[str, torch.Tensor], optimizer: RAdamScheduleFree, now_step: int, grad_accumulate_steps: int=1)-> tuple[float, float]:
     model.train()
     optimizer.train()
 
     input_ids = batch["input_ids"].to(device)
     labels = batch["labels"][:,1:].to(device)
 
-    optimizer.zero_grad()
+    if now_step % grad_accumulate_steps == 0:
+        optimizer.zero_grad()
     outputs = model(input_ids=input_ids)[:,:-1]
     loss = cross_entropy(outputs.reshape(-1, outputs.size(-1)), labels.reshape(-1))
-    loss.backward()
-    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+    (loss/grad_accumulate_steps).backward()
+    if (now_step+1) % grad_accumulate_steps == 0:
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        optimizer.step()
     scheduled_lr = optimizer.param_groups[0]["scheduled_lr"]
-    optimizer.step()
-
     return loss.item(), scheduled_lr
 
 
@@ -150,10 +152,28 @@ def test(model: Gemma3, dataloader: DataLoader, optimizer: RAdamScheduleFree) ->
                 break
 
     if total_tokens > 0:
-        ppl = torch.exp(torch.tensor(total_nll / total_tokens)).item()
+        log_ppl = total_nll / total_tokens
     else:
-        ppl = -100
-    return ppl
+        log_ppl = -100
+    return log_ppl
+
+def const_eval(model: Gemma3, optimizer: RAdamScheduleFree, batch: dict[str, torch.Tensor]) -> float:
+    model.eval()
+    optimizer.eval()
+    input_ids = batch["input_ids"].to(device)
+    labels = batch["labels"][:,1:].to(device)
+
+    with torch.no_grad():
+        outputs = model(input_ids=input_ids)[:,:-1]
+        nll = cross_entropy(outputs.reshape(-1, outputs.size(-1)), labels.reshape(-1), reduction="sum")
+        total_nll = nll.item()
+        total_tokens = (labels != -100).sum().item()
+
+    if total_tokens > 0:
+        log_ppl = total_nll / total_tokens
+    else:
+        log_ppl = -100
+    return log_ppl
 
 def generate_sample(model: Gemma3, optimizer: RAdamScheduleFree, tokenizer, prompt: str, max_new_tokens: int = 100):
     model.eval()
@@ -164,22 +184,25 @@ def generate_sample(model: Gemma3, optimizer: RAdamScheduleFree, tokenizer, prom
         generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
     return generated_text
 # %%
-step = 1
-best_val_ppl = float('inf')
+step = 0
+const_eval_batch = next(iter(test_loader))
+best_val_log_ppl = float('inf')
 for batch in train_loader:
-    train_loss, lr = train_one_step(model, batch, optimizer)
+    train_loss, lr = train_one_step(model, batch, optimizer, now_step=step, grad_accumulate_steps=ACCUMULATE_STEPS)
     writer.add_scalar("Loss/Train", train_loss, step)
     writer.add_scalar("Learning Rate", lr, step)
     run.log({"Loss/Train": train_loss, "Learning Rate": lr}, step=step)
 
     if step % CHECKPOINT_INTERVAL == 0:
         save_checkpoint(model, cfg, optimizer, step, checkpoint_dir=CHECKPOINT_PATH, is_best=False)
-        val_ppl = test(model, test_loader, optimizer)
-        if val_ppl < best_val_ppl:
-            best_val_ppl = val_ppl
+        val_log_ppl = test(model, test_loader, optimizer)
+        const_eval_log_ppl = const_eval(model, optimizer, const_eval_batch)
+        if val_log_ppl < best_val_log_ppl:
+            best_val_log_ppl = val_log_ppl
             save_checkpoint(model, cfg, optimizer, step, checkpoint_dir=CHECKPOINT_PATH, is_best=True)
-        writer.add_scalar("Loss/Validation", val_ppl, step)
-        run.log({"Loss/Validation": val_ppl}, step=step)
+        writer.add_scalar("Loss/Validation", val_log_ppl, step)
+        writer.add_scalar("Loss/ConstEval", const_eval_log_ppl, step)
+        run.log({"Loss/Validation": val_log_ppl, "Loss/ConstEval": const_eval_log_ppl}, step=step)
         menhera_sample = generate_sample(model, optimizer, tokenizer, prompt=menhera_text)
         oji_sample = generate_sample(model, optimizer, tokenizer, prompt=oji_text)
         writer.add_text("Sample/Menhera", menhera_sample, step)
