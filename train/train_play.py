@@ -193,7 +193,7 @@ for batch in train_loader:
     writer.add_scalar("Learning Rate", lr, step)
     run.log({"Loss/Train": train_loss, "Learning Rate": lr}, step=step)
 
-    if step % CHECKPOINT_INTERVAL == 0:
+    if (step+1) % CHECKPOINT_INTERVAL == 0:
         save_checkpoint(model, cfg, optimizer, step, checkpoint_dir=CHECKPOINT_PATH, is_best=False)
         val_log_ppl = test(model, test_loader, optimizer)
         const_eval_log_ppl = const_eval(model, optimizer, const_eval_batch)
