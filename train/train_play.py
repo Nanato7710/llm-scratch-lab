@@ -18,6 +18,9 @@ from torch.utils.tensorboard import SummaryWriter
 import wandb
 from my_utils import count_parameters
 # %%
+LR = 0.004
+BETA1 = 0.96
+WEIGHT_DECAY = 0.0
 SUM_SAMPLES = 1_048_576 # 1BTに近い2の冪数．fineweb2の1sampleが平均540tokensだったから．
 BATCH_SIZE = 16
 ACCUMULATE_STEPS = 16
@@ -108,9 +111,13 @@ def save_checkpoint(model: Gemma3, cfg: Config, optimizer: RAdamScheduleFree, st
         f.write(cfg.model_dump_json(indent=4))
 # %%
 model = torch.compile(model)
-optimizer = RAdamScheduleFree(model.parameters(), lr=0.003, betas=(0.98, 0.999))
+optimizer = RAdamScheduleFree(model.parameters(), lr=LR, betas=(BETA1, 0.999), weight_decay=WEIGHT_DECAY)
 # %%
-run = wandb.init(project="gemma3_play", config=dict(cfg), name=TIME_STR+"_lr3e-3_beta1_0.98", sync_tensorboard=True)
+save_cfg_dict = cfg.model_dump()
+save_cfg_dict["LR"] = LR
+save_cfg_dict["BETA1"] = BETA1
+save_cfg_dict["WEIGHT_DECAY"] = WEIGHT_DECAY
+run = wandb.init(project="gemma3_play", config=save_cfg_dict, name=TIME_STR+f"_lr{LR}_beta1_{BETA1}_weight_decay_{WEIGHT_DECAY}", sync_tensorboard=True)
 writer = SummaryWriter(log_dir=TENSORBOARD_LOG_DIR)
 # %%
 def train_one_step(model: Gemma3, batch: dict[str, torch.Tensor], optimizer: RAdamScheduleFree, now_step: int, grad_accumulate_steps: int=1)-> tuple[float, float]:
