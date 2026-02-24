@@ -52,7 +52,7 @@ with open("train/oji.txt", "r", encoding="utf-8") as f:
     oji_text = f.read()
 
 class CustomOptimizer():
-    def __init__(self, model: torch.nn.Module, muon_lr: float=0.001, radam_schedulefree_lr: float=0.004, betas=(0.99, 0.999), weight_decay=0.0):
+    def __init__(self, model: torch.nn.Module, muon_lr: float=0.02, radam_schedulefree_lr: float=0.004, betas=(0.99, 0.999), weight_decay=0.01):
         muon_params: list[torch.nn.Parameter] = []
         radam_schedulefree_params: list[torch.nn.Parameter] = []
         for _, param in model.named_parameters():
