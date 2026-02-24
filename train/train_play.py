@@ -51,6 +51,40 @@ with open("train/menhera.txt", "r", encoding="utf-8") as f:
 with open("train/oji.txt", "r", encoding="utf-8") as f:
     oji_text = f.read()
 
+class CustomOptimizer():
+    def __init__(self, model: torch.nn.Module, muon_lr: float=0.001, radam_schedulefree_lr: float=0.004, betas=(0.99, 0.999), weight_decay=0.0):
+        muon_params: list[torch.nn.Parameter] = []
+        radam_schedulefree_params: list[torch.nn.Parameter] = []
+        for _, param in model.named_parameters():
+            if not param.requires_grad:
+                continue
+            if param.ndim >= 2:
+                muon_params.append(param)
+            else:
+                radam_schedulefree_params.append(param)
+        self.muon = torch.optim.Muon(muon_params, lr=muon_lr, weight_decay=weight_decay)
+        self.radam_schedulefree = RAdamScheduleFree(radam_schedulefree_params, lr=radam_schedulefree_lr, betas=betas, weight_decay=weight_decay)
+
+    def zero_grad(self):
+        self.muon.zero_grad()
+        self.radam_schedulefree.zero_grad()
+
+    def train(self):
+        self.radam_schedulefree.train()
+
+    def eval(self):
+        self.radam_schedulefree.eval()
+
+    def step(self):
+        self.muon.step()
+        self.radam_schedulefree.step()
+
+    def state_dict(self):
+        return {
+            "muon": self.muon.state_dict(),
+            "radam_schedulefree": self.radam_schedulefree.state_dict()
+        }
+
 vocab_size: int = tokenizer.vocab_size
 
 cfg = Config(
@@ -111,7 +145,8 @@ def save_checkpoint(model: Gemma3, cfg: Config, optimizer: RAdamScheduleFree, st
         f.write(cfg.model_dump_json(indent=4))
 # %%
 model = torch.compile(model)
-optimizer = RAdamScheduleFree(model.parameters(), lr=LR, betas=(BETA1, 0.999), weight_decay=WEIGHT_DECAY)
+# optimizer = RAdamScheduleFree(model.parameters(), lr=LR, betas=(BETA1, 0.999), weight_decay=WEIGHT_DECAY)
+optimizer = CustomOptimizer(model, radam_schedulefree_lr=LR, betas=(BETA1, 0.999))
 # %%
 save_cfg_dict = cfg.model_dump()
 save_cfg_dict["LR"] = LR
@@ -135,7 +170,7 @@ def train_one_step(model: Gemma3, batch: dict[str, torch.Tensor], optimizer: RAd
     if (now_step+1) % grad_accumulate_steps == 0:
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
-    scheduled_lr = optimizer.param_groups[0]["scheduled_lr"]
+    scheduled_lr = optimizer.radam_schedulefree.param_groups[0]["scheduled_lr"]
     return loss.item(), scheduled_lr
 
 
