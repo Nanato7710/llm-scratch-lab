@@ -18,9 +18,9 @@ from torch.utils.tensorboard import SummaryWriter
 import wandb
 from my_utils import count_parameters
 # %%
-MUON_LR = 0.03
-RADAM_SF_LR = 0.01
-BETA1 = 0.999
+MUON_LR = 0.02
+RADAM_SF_LR = 0.005
+BETA1 = 0.98
 WEIGHT_DECAY = 0.01
 SUM_SAMPLES = 1_048_576 # 1BTに近い2の冪数．fineweb2の1sampleが平均540tokensだったから．
 BATCH_SIZE = 16
