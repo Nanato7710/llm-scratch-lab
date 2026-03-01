@@ -27,6 +27,7 @@ BATCH_SIZE = 16
 ACCUMULATE_STEPS = 8
 TOTAL_STEPS = SUM_SAMPLES // BATCH_SIZE
 CHECKPOINT_INTERVAL = 16 * ACCUMULATE_STEPS
+USE_GRADIENT_CLIP = True
 SEQ_LENGTH = 1_024
 RANDOM_SEED = 42
 TIME_STR = time.strftime("%Y%m%d-%H%M%S")
@@ -170,7 +171,8 @@ def train_one_step(model: Gemma3, batch: dict[str, torch.Tensor], optimizer: RAd
     loss = cross_entropy(outputs.reshape(-1, outputs.size(-1)), labels.reshape(-1))
     (loss/grad_accumulate_steps).backward()
     if (now_step+1) % grad_accumulate_steps == 0:
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        if USE_GRADIENT_CLIP:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
     scheduled_lr = optimizer.radam_schedulefree.param_groups[0]["scheduled_lr"]
     return loss.item(), scheduled_lr
