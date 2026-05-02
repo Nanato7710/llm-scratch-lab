@@ -12,11 +12,16 @@ import torch
 from torch.utils.data import DataLoader
 from transformers import DataCollatorForLanguageModeling
 from datasets import load_dataset
-from schedulefree import RAdamScheduleFree
 from torch.nn.functional import cross_entropy
 from torch.utils.tensorboard import SummaryWriter
 import wandb
-from my_utils import count_parameters
+from my_utils import (
+    CustomOptimizer,
+    count_parameters,
+    get_device,
+    read_text,
+    save_checkpoint,
+)
 # %%
 MUON_LR = 0.02
 RADAM_SF_LR = 0.005
@@ -38,54 +43,12 @@ TENSORBOARD_LOG_DIR = f"{TENSORBOARD_ROOT}/{TIME_STR}"
 
 torch.manual_seed(RANDOM_SEED)
 
-if torch.cuda.is_available():
-    device = torch.device("cuda")
-elif torch.backends.mps.is_available():
-    device = torch.device("mps")
-else:
-    device = torch.device("cpu")
+device = get_device()
 
 tokenizer = load_default_tokenizer()
 
-with open("train/menhera.txt", "r", encoding="utf-8") as f:
-    menhera_text = f.read()
-
-with open("train/oji.txt", "r", encoding="utf-8") as f:
-    oji_text = f.read()
-
-class CustomOptimizer():
-    def __init__(self, model: torch.nn.Module, muon_lr: float=0.02, radam_schedulefree_lr: float=0.004, betas=(0.99, 0.999), weight_decay=0.01):
-        muon_params: list[torch.nn.Parameter] = []
-        radam_schedulefree_params: list[torch.nn.Parameter] = []
-        for _, param in model.named_parameters():
-            if not param.requires_grad:
-                continue
-            if param.ndim >= 2:
-                muon_params.append(param)
-            else:
-                radam_schedulefree_params.append(param)
-        self.muon = torch.optim.Muon(muon_params, lr=muon_lr, weight_decay=weight_decay)
-        self.radam_schedulefree = RAdamScheduleFree(radam_schedulefree_params, lr=radam_schedulefree_lr, betas=betas, weight_decay=weight_decay)
-
-    def zero_grad(self):
-        self.muon.zero_grad()
-        self.radam_schedulefree.zero_grad()
-
-    def train(self):
-        self.radam_schedulefree.train()
-
-    def eval(self):
-        self.radam_schedulefree.eval()
-
-    def step(self):
-        self.muon.step()
-        self.radam_schedulefree.step()
-
-    def state_dict(self):
-        return {
-            "muon": self.muon.state_dict(),
-            "radam_schedulefree": self.radam_schedulefree.state_dict()
-        }
+menhera_text = read_text("train/menhera.txt")
+oji_text = read_text("train/oji.txt")
 
 vocab_size: int = tokenizer.vocab_size
 
@@ -115,8 +78,6 @@ cfg = Config(
 model = Gemma3(cfg).to(device)
 count_parameters(model, is_print=True)
 # %%
-from datasets import load_dataset
-# %%
 train_ds = load_dataset("epfml/FineWeb2-HQ", "jpn_Jpan", split="train", streaming=True)
 train_ds = train_ds.remove_columns([col for col in train_ds.column_names if col != "text"])
 test_ds = load_dataset("globis-university/aozorabunko-clean", split="train", streaming=True)
@@ -131,23 +92,7 @@ collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, collate_fn=collator)
 test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, collate_fn=collator)
 # %%
-def save_checkpoint(model: Gemma3, cfg: Config, optimizer: RAdamScheduleFree, step: int, checkpoint_dir: str = "checkpoints", is_best: bool = False):
-    checkpoint_path = Path(checkpoint_dir) / "best" if is_best else Path(checkpoint_dir) / "normal"
-    checkpoint_path.mkdir(parents=True, exist_ok=True)
-
-    raw_model: Gemma3 = model._orig_mod if hasattr(model, "_orig_mod") else model
-    state: dict = {k: v.cpu() for k, v in raw_model.state_dict().items()}
-    optim_state: dict = optimizer.state_dict()
-    torch.save({
-        "model": state,
-        "optimizer": optim_state,
-        "step": step
-    }, checkpoint_path/"models.pt")
-    with open(checkpoint_path/"config.json", "w") as f:
-        f.write(cfg.model_dump_json(indent=4))
-# %%
 model = torch.compile(model)
-# optimizer = RAdamScheduleFree(model.parameters(), lr=LR, betas=(BETA1, 0.999), weight_decay=WEIGHT_DECAY)
 optimizer = CustomOptimizer(model, muon_lr=MUON_LR,  radam_schedulefree_lr=RADAM_SF_LR, betas=(BETA1, 0.999), weight_decay=WEIGHT_DECAY)
 # %%
 save_cfg_dict = cfg.model_dump()
@@ -158,7 +103,7 @@ save_cfg_dict["WEIGHT_DECAY"] = WEIGHT_DECAY
 run = wandb.init(project="gemma3_play", config=save_cfg_dict, name=TIME_STR+f"_radam-lr{RADAM_SF_LR}_muon-lr{MUON_LR}_beta1_{BETA1}_weight_decay_{WEIGHT_DECAY}", sync_tensorboard=True)
 writer = SummaryWriter(log_dir=TENSORBOARD_LOG_DIR)
 # %%
-def train_one_step(model: Gemma3, batch: dict[str, torch.Tensor], optimizer: RAdamScheduleFree, now_step: int, grad_accumulate_steps: int=1)-> tuple[float, float]:
+def train_one_step(model: Gemma3, batch: dict[str, torch.Tensor], optimizer: CustomOptimizer, now_step: int, grad_accumulate_steps: int=1)-> tuple[float, float]:
     model.train()
     optimizer.train()
 
@@ -178,7 +123,7 @@ def train_one_step(model: Gemma3, batch: dict[str, torch.Tensor], optimizer: RAd
     return loss.item(), scheduled_lr
 
 
-def test(model: Gemma3, dataloader: DataLoader, optimizer: RAdamScheduleFree) -> float:
+def test(model: Gemma3, dataloader: DataLoader, optimizer: CustomOptimizer) -> float:
     model.eval()
     optimizer.eval()
     total_nll = 0.0
@@ -203,7 +148,7 @@ def test(model: Gemma3, dataloader: DataLoader, optimizer: RAdamScheduleFree) ->
         log_ppl = -100
     return log_ppl
 
-def const_eval(model: Gemma3, optimizer: RAdamScheduleFree, batch: dict[str, torch.Tensor]) -> float:
+def const_eval(model: Gemma3, optimizer: CustomOptimizer, batch: dict[str, torch.Tensor]) -> float:
     model.eval()
     optimizer.eval()
     input_ids = batch["input_ids"].to(device)
@@ -221,7 +166,7 @@ def const_eval(model: Gemma3, optimizer: RAdamScheduleFree, batch: dict[str, tor
         log_ppl = -100
     return log_ppl
 
-def generate_sample(model: Gemma3, optimizer: RAdamScheduleFree, tokenizer, prompt: str, max_new_tokens: int = 100):
+def generate_sample(model: Gemma3, optimizer: CustomOptimizer, tokenizer, prompt: str, max_new_tokens: int = 100):
     model.eval()
     optimizer.eval()
     input_ids = tokenizer(tokenizer.eos_token+prompt, return_tensors="pt", add_special_tokens=False)["input_ids"].to(device)
@@ -240,12 +185,12 @@ for batch in train_loader:
     run.log({"Loss/Train": train_loss, "Learning Rate": lr}, step=step)
 
     if (step+1) % CHECKPOINT_INTERVAL == 0:
-        save_checkpoint(model, cfg, optimizer, step, checkpoint_dir=CHECKPOINT_PATH, is_best=False)
+        save_checkpoint(model, optimizer, step, checkpoint_dir=CHECKPOINT_PATH, cfg=cfg, is_best=False)
         val_log_ppl = test(model, test_loader, optimizer)
         const_eval_log_ppl = const_eval(model, optimizer, const_eval_batch)
         if val_log_ppl < best_val_log_ppl:
             best_val_log_ppl = val_log_ppl
-            save_checkpoint(model, cfg, optimizer, step, checkpoint_dir=CHECKPOINT_PATH, is_best=True)
+            save_checkpoint(model, optimizer, step, checkpoint_dir=CHECKPOINT_PATH, cfg=cfg, is_best=True)
         writer.add_scalar("Loss/Validation", val_log_ppl, step)
         writer.add_scalar("Loss/ConstEval", const_eval_log_ppl, step)
         run.log({"Loss/Validation": val_log_ppl, "Loss/ConstEval": const_eval_log_ppl}, step=step)
