@@ -77,6 +77,10 @@ class CustomOptimizer:
             "radam_schedulefree": self.radam_schedulefree.state_dict(),
         }
 
+    def load_state_dict(self, state_dict: dict[str, Any]) -> None:
+        self.muon.load_state_dict(state_dict["muon"])
+        self.radam_schedulefree.load_state_dict(state_dict["radam_schedulefree"])
+
 
 def save_checkpoint(
     model: torch.nn.Module,
@@ -105,6 +109,32 @@ def save_checkpoint(
             cfg.model_dump_json(indent=4),
             encoding="utf-8",
         )
+
+
+def resolve_checkpoint_path(checkpoint_dir: str | Path) -> Path:
+    checkpoint_path = Path(checkpoint_dir)
+    if checkpoint_path.is_file():
+        return checkpoint_path
+    if (checkpoint_path / "models.pt").is_file():
+        return checkpoint_path / "models.pt"
+    raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
+
+
+def load_checkpoint(
+    checkpoint_dir: str | Path,
+    model: torch.nn.Module,
+    optimizer: Any | None = None,
+    map_location: str | torch.device | None = None,
+) -> dict[str, Any]:
+    checkpoint_file = resolve_checkpoint_path(checkpoint_dir)
+    checkpoint = torch.load(checkpoint_file, map_location=map_location)
+
+    raw_model = unwrap_compiled_model(model)
+    raw_model.load_state_dict(checkpoint["model"])
+    if optimizer is not None:
+        optimizer.load_state_dict(checkpoint["optimizer"])
+
+    return checkpoint
 
 
 def save_epoch_checkpoint(

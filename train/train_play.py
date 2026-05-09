@@ -19,6 +19,7 @@ from my_utils import (
     CustomOptimizer,
     count_parameters,
     get_device,
+    load_checkpoint,
     read_text,
     save_checkpoint,
 )
@@ -36,7 +37,26 @@ USE_GRADIENT_CLIP = True
 SEQ_LENGTH = 1_024
 RANDOM_SEED = 42
 TIME_STR = time.strftime("%Y%m%d-%H%M%S")
-CHECKPOINT_PATH = f"checkpoints/gemma3_play/{TIME_STR}"
+RESUME_CHECKPOINT_DIR: str | None = None
+# 例:
+# RESUME_CHECKPOINT_DIR = "checkpoints/gemma3_play/20260220-180222/normal"
+# RESUME_CHECKPOINT_DIR = "checkpoints/gemma3_play/20260220-180222/best"
+INITIAL_BEST_VAL_LOG_PPL = float("inf")
+
+
+def get_checkpoint_output_dir(resume_checkpoint_dir: str | None) -> str:
+    if resume_checkpoint_dir is None:
+        return f"checkpoints/gemma3_play/{TIME_STR}"
+
+    checkpoint_path = Path(resume_checkpoint_dir)
+    if checkpoint_path.is_file():
+        checkpoint_path = checkpoint_path.parent
+    if checkpoint_path.name in {"normal", "best"}:
+        checkpoint_path = checkpoint_path.parent
+    return str(checkpoint_path)
+
+
+CHECKPOINT_PATH = get_checkpoint_output_dir(RESUME_CHECKPOINT_DIR)
 TENSORBOARD_ROOT = "logs/gemma3_play"
 TENSORBOARD_LOG_DIR = f"{TENSORBOARD_ROOT}/{TIME_STR}"
 #%%
@@ -78,6 +98,20 @@ cfg = Config(
 model = Gemma3(cfg).to(device)
 count_parameters(model, is_print=True)
 # %%
+model = torch.compile(model)
+optimizer = CustomOptimizer(model, muon_lr=MUON_LR,  radam_schedulefree_lr=RADAM_SF_LR, betas=(BETA1, 0.999), weight_decay=WEIGHT_DECAY)
+
+start_step = 0
+if RESUME_CHECKPOINT_DIR is not None:
+    checkpoint = load_checkpoint(
+        RESUME_CHECKPOINT_DIR,
+        model,
+        optimizer,
+        map_location=device,
+    )
+    start_step = int(checkpoint["step"]) + 1
+    print(f"Resumed from {RESUME_CHECKPOINT_DIR} at step {checkpoint['step']}.")
+# %%
 train_ds = load_dataset("epfml/FineWeb2-HQ", "jpn_Jpan", split="train", streaming=True)
 train_ds = train_ds.remove_columns([col for col in train_ds.column_names if col != "text"])
 test_ds = load_dataset("globis-university/aozorabunko-clean", split="train", streaming=True)
@@ -88,12 +122,12 @@ def tok(batch):
 train_ds = train_ds.map(tok, batched=True, remove_columns=["text"])
 test_ds = test_ds.map(tok, batched=True, remove_columns=["text"])
 # %%
+if start_step > 0:
+    train_ds = train_ds.skip(start_step * BATCH_SIZE)
+# %%
 collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
 train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, collate_fn=collator)
 test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, collate_fn=collator)
-# %%
-model = torch.compile(model)
-optimizer = CustomOptimizer(model, muon_lr=MUON_LR,  radam_schedulefree_lr=RADAM_SF_LR, betas=(BETA1, 0.999), weight_decay=WEIGHT_DECAY)
 # %%
 save_cfg_dict = cfg.model_dump()
 save_cfg_dict["MUON_LR"] = MUON_LR
@@ -175,9 +209,9 @@ def generate_sample(model: Gemma3, optimizer: CustomOptimizer, tokenizer, prompt
         generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
     return generated_text
 # %%
-step = 0
+step = start_step
 const_eval_batch = next(iter(test_loader))
-best_val_log_ppl = float('inf')
+best_val_log_ppl = INITIAL_BEST_VAL_LOG_PPL
 for batch in train_loader:
     train_loss, lr = train_one_step(model, batch, optimizer, now_step=step, grad_accumulate_steps=ACCUMULATE_STEPS)
     writer.add_scalar("Loss/Train", train_loss, step)
