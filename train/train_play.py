@@ -212,6 +212,7 @@ def generate_sample(model: Gemma3, optimizer: CustomOptimizer, tokenizer, prompt
 step = start_step
 const_eval_batch = next(iter(test_loader))
 best_val_log_ppl = INITIAL_BEST_VAL_LOG_PPL
+print(f"使用しているモデルのデバイス: {model.parameters().__next__().device}")
 for batch in train_loader:
     train_loss, lr = train_one_step(model, batch, optimizer, now_step=step, grad_accumulate_steps=ACCUMULATE_STEPS)
     writer.add_scalar("Loss/Train", train_loss, step)
