@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ja" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="llm-scratch-labの構成、コンポーネント追加手順、実験方法を図解するローカルドキュメント"
+    />
+    <title>llm-scratch-lab | Visual Guide</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body id="top">
+    <a class="skip-link" href="#main-content">本文へ移動</a>
+    <div class="reading-progress" aria-hidden="true"><span id="reading-progress"></span></div>
+
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="llm-scratch-lab Webドキュメントの先頭へ">
+        <span class="brand-mark" aria-hidden="true">LS</span>
+        <span>
+          <strong>llm-scratch-lab</strong>
+          <small>Visual Guide</small>
+        </span>
+      </a>
+
+      <div class="topbar-actions">
+        <div class="search-wrap">
+          <label class="sr-only" for="doc-search">ドキュメントを検索</label>
+          <input
+            id="doc-search"
+            type="search"
+            placeholder="見出しを検索  /"
+            autocomplete="off"
+            aria-controls="search-results"
+            aria-expanded="false"
+          />
+          <div id="search-results" class="search-results" hidden></div>
+        </div>
+        <button id="theme-toggle" class="icon-button" type="button" aria-label="配色を切り替える">
+          <span aria-hidden="true">◐</span>
+        </button>
+        <button
+          id="menu-toggle"
+          class="icon-button menu-toggle"
+          type="button"
+          aria-label="目次を開く"
+          aria-controls="sidebar"
+          aria-expanded="false"
+        >
+          <span aria-hidden="true">目次</span>
+        </button>
+      </div>
+    </header>
+
+    <div id="sidebar-backdrop" class="sidebar-backdrop" hidden></div>
+    <aside id="sidebar" class="sidebar" aria-label="ドキュメント目次">
+      <div class="sidebar-label">READING PATH</div>
+      <nav id="table-of-contents">
+        <a class="toc-overview" href="#overview"><span>00</span>全体像</a>
+        <div id="generated-toc"></div>
+      </nav>
+      <div class="sidebar-note">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span>ローカル専用<br />外部assetなし</span>
+      </div>
+    </aside>
+
+    <main id="main-content">
+      <section id="overview" class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">FROM CONFIG TO CHECKPOINT</p>
+          <h1 id="hero-title">実装の場所と、<br /><span>つながり方</span>がわかる。</h1>
+          <p class="hero-lead">
+            モデルを追加する前に全体をつかみ、共通Engineへ接続し、再現可能な実験として動かすためのガイドです。
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#architecture">構成から読む</a>
+            <a class="button secondary" href="#adding-components">追加手順へ</a>
+          </div>
+        </div>
+
+        <div class="hero-dashboard" aria-label="ドキュメントの概要">
+          <div class="dashboard-grid">
+            <div class="metric-card accent-mint">
+              <span class="metric-number">4</span>
+              <span class="metric-label">交換できる<br />コンポーネント</span>
+            </div>
+            <div class="metric-card accent-coral">
+              <span class="metric-number">3</span>
+              <span class="metric-label">理解のための<br />読書経路</span>
+            </div>
+            <div class="metric-card accent-blue">
+              <span class="metric-number">0</span>
+              <span class="metric-label">Web閲覧時の<br />追加依存</span>
+            </div>
+          </div>
+          <div class="mini-flow" aria-label="設定から成果物までの流れ">
+            <span>TOML</span><i aria-hidden="true"></i><span>Registry</span><i aria-hidden="true"></i
+            ><span>Engine</span><i aria-hidden="true"></i><span>Checkpoint</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="journey" aria-labelledby="journey-title">
+        <div class="section-heading compact">
+          <p class="eyebrow">THREE QUESTIONS</p>
+          <h2 id="journey-title">目的から読み始める</h2>
+        </div>
+        <div class="journey-grid">
+          <a class="journey-card" href="#architecture">
+            <span class="journey-index">01</span>
+            <strong>どこで何が動く？</strong>
+            <span>責務とデータフローを確認する</span>
+            <b aria-hidden="true">→</b>
+          </a>
+          <a class="journey-card" href="#adding-components">
+            <span class="journey-index">02</span>
+            <strong>どうやって追加する？</strong>
+            <span>契約、実装、登録、テストを追う</span>
+            <b aria-hidden="true">→</b>
+          </a>
+          <a class="journey-card" href="#experiment-guide">
+            <span class="journey-index">03</span>
+            <strong>どう実験として動かす？</strong>
+            <span>設定、出力、再開条件を確認する</span>
+            <b aria-hidden="true">→</b>
+          </a>
+        </div>
+      </section>
+
+      <section id="architecture" class="doc-chapter" data-source="architecture.md">
+        <header class="chapter-header architecture-header">
+          <div>
+            <span class="chapter-number">01</span>
+            <p class="eyebrow">ARCHITECTURE</p>
+            <h2>プロジェクトの構成</h2>
+            <p>設定が四つのコンポーネントを選び、共通Engineが一つの実験へ組み立てます。</p>
+          </div>
+          <div class="component-orbit" aria-label="四つのコンポーネントと共通Engine">
+            <div class="orbit-core">ENGINE</div>
+            <span class="orbit-item model">MODEL</span>
+            <span class="orbit-item data">DATA</span>
+            <span class="orbit-item method">METHOD</span>
+            <span class="orbit-item optimizer">OPTIMIZER</span>
+          </div>
+        </header>
+
+        <div class="visual-block">
+          <div class="visual-title">
+            <span>実験の組み立て</span>
+            <small>処理の順番</small>
+          </div>
+          <div class="architecture-flow">
+            <div class="flow-node"><small>INPUT</small><strong>実験TOML</strong><span>name + config</span></div>
+            <div class="flow-arrow" aria-hidden="true">→</div>
+            <div class="flow-node"><small>VALIDATE</small><strong>Registry</strong><span>Pydantic schema</span></div>
+            <div class="flow-arrow" aria-hidden="true">→</div>
+            <div class="flow-node"><small>BUILD</small><strong>Engine</strong><span>互換性検査 + 学習</span></div>
+            <div class="flow-arrow" aria-hidden="true">→</div>
+            <div class="flow-node"><small>OUTPUT</small><strong>Run directory</strong><span>config + checkpoint</span></div>
+          </div>
+          <div class="component-grid">
+            <article class="component-card model"><span>01</span><h3>Model</h3><p>入力Tensorからlogitsを計算する。</p><code>ModelOutput</code></article>
+            <article class="component-card data"><span>02</span><h3>Data</h3><p>DataLoaderと再開状態を構築する。</p><code>DataBundle</code></article>
+            <article class="component-card method"><span>03</span><h3>Method</h3><p>batchを解釈してlossを定める。</p><code>StepOutput</code></article>
+            <article class="component-card optimizer"><span>04</span><h3>Optimizer</h3><p>更新と状態切り替えを担う。</p><code>Adapter</code></article>
+          </div>
+          <div class="boundary-note"><strong>Trackerは別の境界</strong><span>四種類のRegistry componentではなく、学習基盤側のProtocolです。</span></div>
+        </div>
+
+        <article id="architecture-content" class="rendered-markdown" aria-label="プロジェクトの構成の全文"></article>
+      </section>
+
+      <section id="adding-components" class="doc-chapter" data-source="adding-components.md">
+        <header class="chapter-header adding-header">
+          <div>
+            <span class="chapter-number">02</span>
+            <p class="eyebrow">EXTENSION GUIDE</p>
+            <h2>コンポーネントの追加手順</h2>
+            <p>設定型から小型統合テストまで、追加作業を七つの判断へ分けます。</p>
+          </div>
+          <div class="contract-stack" aria-label="追加する実装の層">
+            <span>TEST</span><span>TOML</span><span>REGISTER</span><span>FACTORY</span><span>IMPLEMENT</span><span>CONFIG</span>
+          </div>
+        </header>
+
+        <div class="visual-block">
+          <div class="visual-title"><span>追加の七段階</span><small>迷ったら上から確認</small></div>
+          <ol class="stepper">
+            <li><span>1</span><strong>種類と名前</strong><small>checkpointに残る識別子</small></li>
+            <li><span>2</span><strong>設定型</strong><small>Pydantic + extra forbid</small></li>
+            <li><span>3</span><strong>本体</strong><small>Engineの契約を実装</small></li>
+            <li><span>4</span><strong>Factory</strong><small>設定とContextを受け取る</small></li>
+            <li><span>5</span><strong>Register</strong><small>種類、名前、schemaを登録</small></li>
+            <li><span>6</span><strong>Default接続</strong><small>明示的にregisterを呼ぶ</small></li>
+            <li><span>7</span><strong>実験とテスト</strong><small>共通Engineまで通す</small></li>
+          </ol>
+          <div class="contract-grid">
+            <article><span class="contract-dot model"></span><strong>Model</strong><code>forward → ModelOutput</code></article>
+            <article><span class="contract-dot data"></span><strong>Data</strong><code>build → DataBundle</code></article>
+            <article><span class="contract-dot method"></span><strong>Method</strong><code>step → StepOutput</code></article>
+            <article><span class="contract-dot optimizer"></span><strong>Optimizer</strong><code>builder → adapter</code></article>
+          </div>
+        </div>
+
+        <article id="adding-components-content" class="rendered-markdown" aria-label="コンポーネントの追加手順の全文"></article>
+      </section>
+
+      <section id="experiment-guide" class="doc-chapter" data-source="experiment-guide.md">
+        <header class="chapter-header experiment-header">
+          <div>
+            <span class="chapter-number">03</span>
+            <p class="eyebrow">RUN & RESUME</p>
+            <h2>実験の設定と実行</h2>
+            <p>TOMLの選択を、update、評価、保存、再開まで一つの流れとして追います。</p>
+          </div>
+          <div class="run-card" aria-label="実験実行コマンドの概要">
+            <span class="terminal-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <code><b>$</b> uv run llm-lab train</code>
+            <small>config → run-id → latest.pt</small>
+          </div>
+        </header>
+
+        <div class="visual-block">
+          <div class="visual-title"><span>一回の実験が残すもの</span><small>update単位で管理</small></div>
+          <div class="run-timeline">
+            <div><span>CONFIG</span><strong>四つの選択</strong><small>model / data / method / optimizer</small></div>
+            <i aria-hidden="true"></i>
+            <div><span>TRAIN</span><strong>Microbatch</strong><small>勾配を蓄積</small></div>
+            <i aria-hidden="true"></i>
+            <div><span>UPDATE</span><strong>Optimizer step</strong><small>間隔の基準</small></div>
+            <i aria-hidden="true"></i>
+            <div><span>OUTPUT</span><strong>Run directory</strong><small>config + checkpoints</small></div>
+          </div>
+          <div class="resume-grid">
+            <div><span class="check">✓</span><p><strong>登録名を照合</strong><br />model、data、method、optimizer</p></div>
+            <div><span class="check">✓</span><p><strong>状態を復元</strong><br />model、optimizer、data、RNG</p></div>
+            <div><span class="warn">!</span><p><strong>正確な順序</strong><br />num_workers=0、shuffleなし</p></div>
+          </div>
+        </div>
+
+        <article id="experiment-guide-content" class="rendered-markdown" aria-label="実験の設定と実行の全文"></article>
+      </section>
+
+      <footer>
+        <div><strong>llm-scratch-lab</strong><span>Local Visual Documentation</span></div>
+        <a href="../../README.md">READMEへ戻る</a>
+      </footer>
+    </main>
+
+    <script src="content.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

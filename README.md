@@ -25,6 +25,13 @@ macOSでは通常のPyTorch packageが選ばれ、利用可能ならMPSを使い
 
 初めてこのリポジトリを変更する場合は、次の順で参照してください。
 
+[視覚的なWeb版](docs/web/index.html)では、三つの文書を図解、検索、コードコピー付きの一画面で読めます。
+`docs/web/index.html`を直接開くか、リポジトリ直下で次のコマンドを実行して`http://localhost:8000/docs/web/`を開きます。
+
+```bash
+uv run python -m http.server 8000
+```
+
 1. [プロジェクトの構成](docs/architecture.md)では、設定から学習結果までの流れと各packageの責務を説明します。
 2. [コンポーネントの追加手順](docs/adding-components.md)では、モデル、データ、学習方法、オプティマイザの実装テンプレートとテスト方法を示します。
 3. [実験の設定と実行](docs/experiment-guide.md)では、TOML、CLI上書き、出力、checkpointからの再開を説明します。
