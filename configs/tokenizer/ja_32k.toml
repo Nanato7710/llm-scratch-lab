@@ -1,0 +1,36 @@
+artifact_dir = "../../artifacts/tokenizers/ja_32k"
+corpus_path = "../../outputs/tokenizer/ja_32k_corpus.txt"
+vocab_size = 32768
+max_sentences = 10000000
+max_file_size_bytes = 21474836480
+shuffle_seed = 42
+shuffle_buffer_size = 10000
+character_coverage = 0.9995
+normalization_rule_name = "nmt_nfkc"
+byte_fallback = true
+user_defined_symbols = ["<mask>", "<|im_start|>", "<|im_end|>"]
+
+[[sources]]
+path = "hpprc/jawiki-slim"
+weight = 0.35
+
+[[sources]]
+path = "hpprc/llmjp-warp-html"
+weight = 0.30
+
+[[sources]]
+path = "singletongue/cc100-documents"
+name = "ja"
+weight = 0.20
+
+[[sources]]
+path = "hpprc/jawiki-books-paragraphs"
+weight = 0.10
+
+[[sources]]
+path = "globis-university/aozorabunko-clean"
+weight = 0.03
+
+[[sources]]
+path = "kunishou/J-ResearchCorpus"
+weight = 0.02

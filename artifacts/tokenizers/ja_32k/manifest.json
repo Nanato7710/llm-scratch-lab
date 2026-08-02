@@ -1,0 +1,21 @@
+{
+  "format_version": 1,
+  "vocab_size": 32768,
+  "special_token_ids": {
+    "unk": 0,
+    "bos": 1,
+    "eos": 2,
+    "pad": 3,
+    "mask": 4,
+    "im_start": 5,
+    "im_end": 6
+  },
+  "provenance": "Historical repository artifact; exact corpus snapshot and generation date were not recorded.",
+  "sha256": {
+    "sentencepiece/tokenizer.model": "3164e1cf5e2f7b15d2cea5f849af21f0db96e538a37a6de4f4774fb75798ae95",
+    "sentencepiece/tokenizer.vocab": "2c594f3e999cac395eb20bdd735edbb81e7a3bfbe1adf2e302beadec53e2d202",
+    "huggingface/chat_template.jinja": "9fb0644d4f3be97224ba4b9ae07959e5ad2575eb8209ef0d0b11856453741d13",
+    "huggingface/tokenizer.json": "6469ffc944e928f1affeeeac736e628dbbf65d5df75aa050cfd9296299e3145e",
+    "huggingface/tokenizer_config.json": "f1d763575a16e7046d751bba088a24a58421c0b86fb5cee4a2ad95721388dc17"
+  }
+}

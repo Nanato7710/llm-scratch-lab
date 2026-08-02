@@ -1,0 +1,81 @@
+[model]
+name = "gemma3"
+
+[model.config]
+vocab_size = 32768
+context_length = 1024
+emb_dim = 512
+n_heads = 8
+n_layers = 24
+hidden_dim = 1024
+head_dim = 64
+n_kv_groups = 2
+sliding_window = 512
+rope_local_base = 10000.0
+rope_global_base = 1000000.0
+query_pre_attn_scalar = 128
+qk_norm = true
+dtype = "bfloat16"
+layer_pattern = ["local", "local", "local", "global"]
+attention_gate = "none"
+
+[data]
+name = "hf_streaming"
+
+[data.config]
+tokenizer_path = "../../artifacts/tokenizers/ja_32k/huggingface"
+batch_size = 16
+sequence_length = 1024
+shuffle_train = true
+shuffle_seed = 42
+shuffle_buffer_size = 10000
+stopping_strategy = "all_exhausted"
+add_eos_between_samples = true
+drop_last_train = true
+
+[[data.config.train_sources]]
+path = "epfml/FineWeb2-HQ"
+name = "jpn_Jpan"
+split = "train"
+text_column = "text"
+
+[[data.config.eval_sources]]
+path = "globis-university/aozorabunko-clean"
+split = "train"
+text_column = "text"
+
+[method]
+name = "causal_pretraining"
+
+[method.config]
+ignore_index = -100
+
+[optimizer]
+name = "muon_radam_schedulefree"
+
+[optimizer.config]
+muon_lr = 0.02
+radam_lr = 0.005
+beta1 = 0.98
+beta2 = 0.999
+weight_decay = 0.01
+
+[runtime]
+device = "auto"
+seed = 42
+max_updates = 8192
+gradient_accumulation_steps = 8
+max_grad_norm = 1.0
+evaluation_interval = 16
+checkpoint_interval = 16
+evaluation_batches = 30
+compile = false
+num_workers = 0
+
+[tracking]
+backends = []
+project = "gemma3-play"
+
+[output]
+root = "../../outputs"
+experiment_name = "gemma3-base"
